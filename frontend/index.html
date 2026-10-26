@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FinStream Institutional Forensics | Ultra-Low Latency Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    
+    <!-- Left Navigation Bar -->
+    <aside class="app-sidebar">
+      <div class="app-brand">
+        <div class="brand-badge">⚡</div>
+        <div class="brand-info">
+          <h2>FinStream</h2>
+          <span class="sub">INSTITUTIONAL RADAR</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" onclick="switchTab('radar', this)">
+          <span class="icon">📡</span>
+          <span>Surveillance Desk</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('graph', this)">
+          <span class="icon">🕸️</span>
+          <span>Collusion Topology</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('order', this)">
+          <span class="icon">⚡</span>
+          <span>HFT Bot Gateway</span>
+        </button>
+      </nav>
+
+      <!-- Telemetry Status Box -->
+      <div class="sidebar-telemetry">
+        <div class="telemetry-header">
+          <span class="status-pulse"></span>
+          <span>SPARK CEP STREAM</span>
+        </div>
+        <div class="telemetry-grid">
+          <div><label>LATENCY</label><span id="stat-latency">1.8ms</span></div>
+          <div><label>BUFFER</label><span>35s Window</span></div>
+          <div><label>THROUGHPUT</label><span id="stat-tps">12,450/s</span></div>
+          <div><label>ENGINE</label><span style="color:#00f2fe;">Local[*]</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main App Stage -->
+    <main class="app-main">
+      
+      <!-- Top Sleek Bar -->
+      <header class="app-toolbar">
+        <div class="toolbar-ticker">
+          <div class="crypto-pair">
+            <span class="crypto-badge">BTC</span>
+            <span class="pair-name">BTC / USDT</span>
+          </div>
+          <div class="price-display">
+            <span id="current-price" class="current-price">$65,982.50</span>
+            <span id="z-score" class="z-badge">Z-SCORE: 0.00σ</span>
+          </div>
+        </div>
+
+        <!-- Anomaly Control Center -->
+        <div class="anomaly-controls">
+          <span class="ctrl-label">INJECT FAULT:</span>
+          <button class="btn btn-crash" onclick="triggerEvent('TRIGGER_FLASH_CRASH')">⚡ Flash Crash</button>
+          <button class="btn btn-whale" onclick="triggerEvent('TRIGGER_WHALE')">🐋 Whale Inflow</button>
+          <button class="btn btn-wash" onclick="triggerEvent('TRIGGER_WASH_TRADE')">🔄 Wash Collusion</button>
+        </div>
+
+        <button class="btn btn-export" onclick="openReportModal()">📑 Export Audit Forensic</button>
+      </header>
+
+      <!-- TAB 1: Surveillance Desk -->
+      <section id="tab-radar" class="tab-content active">
+        
+        <!-- Live Metrics Ribbon -->
+        <div class="metric-ribbon">
+          <div class="metric-card">
+            <span class="m-label">24H HIGH</span>
+            <span class="m-val green" id="metric-high">$66,420.00</span>
+          </div>
+          <div class="metric-card">
+            <span class="m-label">24H LOW</span>
+            <span class="m-val red" id="metric-low">$64,110.00</span>
+          </div>
+          <div class="metric-card">
+            <span class="m-label">VOLATILITY INDEX</span>
+            <span class="m-val cyan" id="metric-vola">0.84% (Low)</span>
+          </div>
+          <div class="metric-card">
+            <span class="m-label">ANOMALIES INTERCEPTED</span>
+            <span class="m-val yellow" id="metric-anomalies">0</span>
+          </div>
+        </div>
+
+        <!-- Main Chart + L2 Depth Split -->
+        <div class="stage-split">
+          
+          <!-- Chart Container -->
+          <div class="panel chart-panel">
+            <div class="panel-header">
+              <div class="panel-title-group">
+                <h3>MICRO-TICK STREAM CANVAS</h3>
+                <p>Hardware accelerated HTML5 canvas rendering sub-second ticks</p>
+              </div>
+              <div class="chart-legend">
+                <span class="dot-legend cyan"></span> Real-time Price
+                <span class="dot-legend red" style="margin-left:8px;"></span> Anomaly Deviation
+              </div>
+            </div>
+            <div class="canvas-wrapper">
+              <canvas id="marketChart"></canvas>
+            </div>
+          </div>
+
+          <!-- High-End L2 Depth Book with Real Volume Bars -->
+          <div class="panel depth-panel">
+            <div class="panel-header">
+              <div class="panel-title-group">
+                <h3>L2 ORDER FLOW DEPTH</h3>
+                <p>Bid/Ask volume imbalances</p>
+              </div>
+            </div>
+            
+            <div class="orderbook-stage">
+              <div class="ob-col-headers">
+                <span>PRICE (USDT)</span>
+                <span>SIZE (BTC)</span>
+              </div>
+              <div class="ob-rows asks" id="asks-list"></div>
+              
+              <div class="spread-indicator">
+                <span class="spread-line"></span>
+                <span class="spread-text" id="spread-box">SPREAD: 0.75 USDT</span>
+                <span class="spread-line"></span>
+              </div>
+              
+              <div class="ob-rows bids" id="bids-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audit Incident Stream -->
+        <div class="panel logs-panel">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h3>COMPLEX EVENT PROCESSING (CEP) AUDIT TRAIL</h3>
+              <p>Stateful streaming alerts flagged by PySpark sliding window</p>
+            </div>
+            <button class="btn-clear" onclick="clearLogs()">Clear Log Stream</button>
+          </div>
+          <div class="incident-stream" id="logs-container">
+            <div class="empty-log-state" id="empty-state">Stream listening... No anomalous deviations intercepted in active window.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: Collusion Topology -->
+      <section id="tab-graph" class="tab-content">
+        <div class="panel full-panel">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h3>INTERACTIVE WASH TRADING GRAPH EXPLORER</h3>
+              <p>Real-time cyclic wallet detection across decentralized order flow</p>
+            </div>
+          </div>
+          <div class="graph-explorer-grid">
+            <div class="canvas-wrapper graph-canvas-wrap">
+              <canvas id="graphCanvas"></canvas>
+            </div>
+            <div class="wallet-inspector" id="wallet-details">
+              <h4>WALLET FORENSICS</h4>
+              <p class="hint">Click on any glowing wallet node in the topological canvas to inspect the signature.</p>
+              <div id="inspector-data" class="inspector-empty">Select a wallet node</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: HFT Bot Gateway -->
+      <section id="tab-order" class="tab-content">
+        <div class="panel full-panel">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h3>HFT SIMULATION & ORDER GATEWAY</h3>
+              <p>Test real-time execution safety against the streaming CEP filter</p>
+            </div>
+          </div>
+          <div class="bot-simulator-container">
+            <div class="bot-card">
+              <div class="form-group">
+                <label>Source Wallet Address</label>
+                <select id="sim-wallet" class="custom-input">
+                  <option value="0x71A...3bF">0x71A...3bF [Flagged Collusion Entity]</option>
+                  <option value="0x98E...11A">0x98E...11A [Monitored Node]</option>
+                  <option value="0xFA3...001">0xFA3...001 [Whitelisted Clean Retail]</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Order Size (BTC)</label>
+                <input type="number" id="sim-size" value="14.5" min="0.1" step="0.5" class="custom-input">
+              </div>
+              <div class="form-group">
+                <label>Order Type</label>
+                <select id="sim-side" class="custom-input">
+                  <option value="BUY">BUY - Aggressive Inflow</option>
+                  <option value="SELL">SELL - High Velocity Dump</option>
+                </select>
+              </div>
+              <button class="btn btn-simulate" onclick="simulateOrder()">⚡ Ingest Order via Kafka Pipeline</button>
+              <div id="sim-verdict" class="verdict-box">Standby: Pipeline ready for execution telemetry.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Forensic Report Modal -->
+  <div class="modal-backdrop" id="report-modal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <div>
+          <h3>FINSTREAM REGULATORY AUDIT REPORT</h3>
+          <span class="modal-sub">Captured from Apache Spark In-Memory Stateful Stream</span>
+        </div>
+        <button class="modal-close" onclick="closeReportModal()">✕</button>
+      </div>
+      <div id="report-content" class="report-content"></div>
+      <div class="modal-footer">
+        <button class="btn btn-print" onclick="window.print()">🖨️ Export PDF Report</button>
+        <button class="btn" onclick="closeReportModal()">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
