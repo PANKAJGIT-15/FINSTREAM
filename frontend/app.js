@@ -1,11 +1,13 @@
-let ws;
 const prices = [];
 const maxDataPoints = 48;
 const recordedAnomalies = [];
 let anomalyCount = 0;
 
+let currentPrice = 64250.0;
 let dayHigh = 65000;
-let dayLow = 65000;
+let dayLow = 64000;
+const priceWindow = [];
+const windowSize = 35;
 
 const chartCanvas = document.getElementById('marketChart');
 const chartCtx = chartCanvas.getContext('2d');
@@ -24,56 +26,85 @@ const nodes = [
 ];
 
 function resizeCanvases() {
-  if (chartCanvas.parentElement) {
+  if (chartCanvas && chartCanvas.parentElement) {
     chartCanvas.width = chartCanvas.parentElement.clientWidth;
     chartCanvas.height = chartCanvas.parentElement.clientHeight;
   }
-  if (graphCanvas.parentElement) {
+  if (graphCanvas && graphCanvas.parentElement) {
     graphCanvas.width = graphCanvas.parentElement.clientWidth;
     graphCanvas.height = graphCanvas.parentElement.clientHeight;
   }
 }
 window.addEventListener("resize", resizeCanvases);
 
-function initWebSocket() {
-  ws = new WebSocket("ws://127.0.0.1:8000/ws/market");
+// --- In-Browser Streaming Engine (Replaces Python Engine on Vercel) ---
+function generateTick() {
+  const delta = (Math.random() * (0.0012 - (-0.0012)) + (-0.0012));
+  currentPrice = +(currentPrice * (1 + delta)).toFixed(2);
+  const volume = +(Math.random() * (1.45 - 0.02) + 0.02).toFixed(4);
+  const side = Math.random() > 0.5 ? "BUY" : "SELL";
 
-  ws.onopen = () => {
-    document.getElementById("stat-latency").innerText = "1.4ms";
+  return {
+    type: "TICK",
+    symbol: "BTC-USDT",
+    price: currentPrice,
+    volume: volume,
+    side: side,
+    timestamp: new Date().toLocaleTimeString()
   };
+}
 
-  ws.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
+function processAnalytics(tick) {
+  priceWindow.push(tick.price);
+  if (priceWindow.length > windowSize) priceWindow.shift();
 
-    if (msg.event === "MARKET_DATA") {
-      handleMarketData(msg);
-    } else if (msg.event === "ANOMALY") {
-      anomalyCount++;
-      document.getElementById("metric-anomalies").innerText = anomalyCount;
-      const record = { type: "FLASH CRASH", detail: `Drop: -${msg.data.drop_percent}% | Z: ${msg.data.z_score}σ`, time: new Date().toLocaleTimeString() };
-      recordedAnomalies.unshift(record);
-      logAnomaly(`FLASH CRASH: -${msg.data.drop_percent}% (Z-Score: ${msg.data.z_score}σ)`, "CRITICAL");
-    } else if (msg.event === "WHALE") {
-      anomalyCount++;
-      document.getElementById("metric-anomalies").innerText = anomalyCount;
-      const record = { type: "WHALE INFLOW", detail: `${msg.data.volume} BTC ($${msg.data.notional_usd.toLocaleString()})`, time: new Date().toLocaleTimeString() };
-      recordedAnomalies.unshift(record);
-      logAnomaly(`WHALE SURGE: ${msg.data.volume} BTC ($${msg.data.notional_usd.toLocaleString()})`, "WHALE");
-    } else if (msg.event === "WASH_TRADE") {
-      anomalyCount++;
-      document.getElementById("metric-anomalies").innerText = anomalyCount;
-      washAlertActive = true;
-      setTimeout(() => { washAlertActive = false; }, 4500);
-      const record = { type: "WASH COLLUSION", detail: `4-Address Cyclic Loop | Vol: ${msg.data.volume} BTC`, time: new Date().toLocaleTimeString() };
-      recordedAnomalies.unshift(record);
-      logAnomaly(`CIRCULAR COLLUSION: 4-Wallet Loop (${msg.data.volume} BTC)`, "WASH");
+  let zScore = 0.0;
+  if (priceWindow.length >= 10) {
+    const mean = priceWindow.reduce((a, b) => a + b, 0) / priceWindow.length;
+    const variance = priceWindow.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / priceWindow.length;
+    const std = Math.sqrt(variance);
+    if (std > 0) {
+      zScore = +((tick.price - mean) / std).toFixed(2);
     }
-  };
+  }
 
-  ws.onclose = () => {
-    document.getElementById("stat-latency").innerText = "OFFLINE";
-    setTimeout(initWebSocket, 2000);
+  // Generate simulated L2 Orderbook
+  const bids = [];
+  const asks = [];
+  for (let i = 1; i <= 5; i++) {
+    const spread = i * 0.75;
+    bids.push({
+      price: +(tick.price - spread).toFixed(2),
+      size: +(Math.random() * (3.2 - 0.4) + 0.4).toFixed(3)
+    });
+    asks.push({
+      price: +(tick.price + spread).toFixed(2),
+      size: +(Math.random() * (3.2 - 0.4) + 0.4).toFixed(3)
+    });
+  }
+
+  return {
+    processed_tick: tick,
+    z_score: zScore,
+    orderbook: { bids, asks },
+    is_anomaly: Math.abs(zScore) >= 3.0
   };
+}
+
+function startStreamPipeline() {
+  document.getElementById("stat-latency").innerText = "1.2ms";
+
+  setInterval(() => {
+    const tick = generateTick();
+    const result = processAnalytics(tick);
+
+    handleMarketData({
+      tick: result.processed_tick,
+      z_score: result.z_score,
+      orderbook: result.orderbook,
+      is_anomaly: result.is_anomaly
+    });
+  }, 120);
 }
 
 function handleMarketData(data) {
@@ -110,6 +141,7 @@ function handleMarketData(data) {
 function updateOrderbook(ob) {
   const asksDiv = document.getElementById("asks-list");
   const bidsDiv = document.getElementById("bids-list");
+  if (!asksDiv || !bidsDiv) return;
 
   const maxSize = Math.max(
     ...ob.asks.map(a => a.size),
@@ -141,6 +173,7 @@ function updateOrderbook(ob) {
 }
 
 function drawChart() {
+  if (!chartCanvas) return;
   const w = chartCanvas.width;
   const h = chartCanvas.height;
   chartCtx.clearRect(0, 0, w, h);
@@ -150,7 +183,6 @@ function drawChart() {
   const min = Math.min(...prices) * 0.9995;
   const max = Math.max(...prices) * 1.0005;
 
-  // Grid
   chartCtx.strokeStyle = "#131a26";
   chartCtx.lineWidth = 1;
   for (let i = 1; i <= 5; i++) {
@@ -163,7 +195,6 @@ function drawChart() {
 
   const step = w / (maxDataPoints - 1);
 
-  // Gradient area fill under price line
   const grad = chartCtx.createLinearGradient(0, 0, 0, h);
   grad.addColorStop(0, "rgba(0, 242, 254, 0.22)");
   grad.addColorStop(1, "rgba(0, 242, 254, 0.0)");
@@ -181,7 +212,6 @@ function drawChart() {
   chartCtx.fillStyle = grad;
   chartCtx.fill();
 
-  // Price stroke with glow
   chartCtx.shadowColor = "#00f2fe";
   chartCtx.shadowBlur = 10;
   chartCtx.strokeStyle = "#00f2fe";
@@ -195,15 +225,15 @@ function drawChart() {
     else chartCtx.lineTo(x, y);
   });
   chartCtx.stroke();
-  chartCtx.shadowBlur = 0; // Reset
+  chartCtx.shadowBlur = 0;
 }
 
 function drawWashGraph() {
+  if (!graphCanvas) return;
   const w = graphCanvas.width;
   const h = graphCanvas.height;
   graphCtx.clearRect(0, 0, w, h);
 
-  // Calculate coordinates relative to canvas size
   const coords = [
     { x: w * 0.25, y: h * 0.28 },
     { x: w * 0.75, y: h * 0.28 },
@@ -219,7 +249,6 @@ function drawWashGraph() {
     graphCtx.shadowBlur = 12;
   }
 
-  // Draw cycle loop
   graphCtx.beginPath();
   graphCtx.moveTo(coords[0].x, coords[0].y);
   graphCtx.lineTo(coords[1].x, coords[1].y);
@@ -229,7 +258,6 @@ function drawWashGraph() {
   graphCtx.stroke();
   graphCtx.shadowBlur = 0;
 
-  // Render nodes
   nodes.forEach((n, idx) => {
     const c = coords[idx];
     n.currX = c.x;
@@ -252,34 +280,36 @@ function drawWashGraph() {
   requestAnimationFrame(drawWashGraph);
 }
 
-// Click on Graph canvas
-graphCanvas.addEventListener("click", (e) => {
-  const rect = graphCanvas.getBoundingClientRect();
-  const clickX = e.clientX - rect.left;
-  const clickY = e.clientY - rect.top;
+if (graphCanvas) {
+  graphCanvas.addEventListener("click", (e) => {
+    const rect = graphCanvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
 
-  nodes.forEach(n => {
-    if (!n.currX) return;
-    const dist = Math.hypot(n.currX - clickX, n.currY - clickY);
-    if (dist < 26) {
-      document.getElementById("inspector-data").innerHTML = `
-        <div style="background:#090c13; padding:12px; border-radius:6px; border:1px solid #1c2436; margin-top:10px;">
-          <p><b style="color:#fff;">Node ID:</b> ${n.id}</p>
-          <p><b style="color:#fff;">Address:</b> ${n.label}</p>
-          <p><b style="color:#fff;">Cumulative Volume:</b> ${n.volume}</p>
-          <p><b style="color:#fff;">Risk Profile:</b> <span style="color:#ef4444">${n.risk}</span></p>
-          <p style="margin-top:8px; font-size:10px; color:#10b981;">Telemetry: Active Ingestion into Parquet Lake</p>
-        </div>
-      `;
-    }
+    nodes.forEach(n => {
+      if (!n.currX) return;
+      const dist = Math.hypot(n.currX - clickX, n.currY - clickY);
+      if (dist < 26) {
+        document.getElementById("inspector-data").innerHTML = `
+          <div style="background:#090c13; padding:12px; border-radius:6px; border:1px solid #1c2436; margin-top:10px;">
+            <p><b style="color:#fff;">Node ID:</b> ${n.id}</p>
+            <p><b style="color:#fff;">Address:</b> ${n.label}</p>
+            <p><b style="color:#fff;">Cumulative Volume:</b> ${n.volume}</p>
+            <p><b style="color:#fff;">Risk Profile:</b> <span style="color:#ef4444">${n.risk}</span></p>
+            <p style="margin-top:8px; font-size:10px; color:#10b981;">Telemetry: Active Ingestion into Parquet Lake</p>
+          </div>
+        `;
+      }
+    });
   });
-});
+}
 
 function logAnomaly(text, level = "NORMAL") {
   const empty = document.getElementById("empty-state");
   if (empty) empty.style.display = "none";
 
   const container = document.getElementById("logs-container");
+  if (!container) return;
   const row = document.createElement("div");
   row.className = `log-item ${level}`;
   row.innerHTML = `<span>[${new Date().toLocaleTimeString()}]</span> <span>${text}</span>`;
@@ -291,9 +321,48 @@ function clearLogs() {
   document.getElementById("logs-container").innerHTML = `<div class="empty-log-state" id="empty-state">Stream listening... No anomalous deviations intercepted in active window.</div>`;
 }
 
+// Injected Anomaly Buttons Handlers
 function triggerEvent(actionType) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ action: actionType }));
+  anomalyCount++;
+  document.getElementById("metric-anomalies").innerText = anomalyCount;
+
+  if (actionType === "TRIGGER_FLASH_CRASH") {
+    const dropPct = +(Math.random() * (6.5 - 4.5) + 4.5).toFixed(2);
+    currentPrice = +(currentPrice * (1 - (dropPct / 100))).toFixed(2);
+    const zScore = +(Math.random() * (5.4 - 3.8) + 3.8).toFixed(2);
+    
+    recordedAnomalies.unshift({
+      type: "FLASH CRASH",
+      detail: `Drop: -${dropPct}% | Z: ${zScore}σ`,
+      time: new Date().toLocaleTimeString()
+    });
+    logAnomaly(`FLASH CRASH: -${dropPct}% (Z-Score: ${zScore}σ)`, "CRITICAL");
+
+  } else if (actionType === "TRIGGER_WHALE") {
+    const vol = +(Math.random() * (80.0 - 35.0) + 35.0).toFixed(2);
+    const side = Math.random() > 0.5 ? "BUY" : "SELL";
+    const shift = side === "BUY" ? 0.009 : -0.009;
+    currentPrice = +(currentPrice * (1 + shift)).toFixed(2);
+    const notional = +(currentPrice * vol).toFixed(2);
+
+    recordedAnomalies.unshift({
+      type: "WHALE INFLOW",
+      detail: `${vol} BTC ($${notional.toLocaleString()})`,
+      time: new Date().toLocaleTimeString()
+    });
+    logAnomaly(`WHALE SURGE: ${vol} BTC ($${notional.toLocaleString()})`, "WHALE");
+
+  } else if (actionType === "TRIGGER_WASH_TRADE") {
+    washAlertActive = true;
+    setTimeout(() => { washAlertActive = false; }, 4500);
+    const vol = +(Math.random() * (42.0 - 18.0) + 18.0).toFixed(2);
+
+    recordedAnomalies.unshift({
+      type: "WASH COLLUSION",
+      detail: `4-Address Cyclic Loop | Vol: ${vol} BTC`,
+      time: new Date().toLocaleTimeString()
+    });
+    logAnomaly(`CIRCULAR COLLUSION: 4-Wallet Loop (${vol} BTC)`, "WASH");
   }
 }
 
@@ -317,7 +386,7 @@ function simulateOrder() {
     if (wallet.includes("0x71A") || size > 25) {
       banner.innerHTML = `
         <span style="color:#ef4444; font-weight:bold;">🚨 BLOCKED BY COMPLEX EVENT ENGINE:</span><br>
-        Cyclic Collusion match on address ${wallet}. Size (${size} BTC) triggers anomaly threshold ($Z > 3.0\\sigma$). Incident dumped to forensic parquet sink.
+        Cyclic Collusion match on address ${wallet}. Size (${size} BTC) triggers anomaly threshold ($Z > 3.0σ). Incident dumped to forensic parquet sink.
       `;
     } else {
       banner.innerHTML = `
@@ -359,9 +428,9 @@ function closeReportModal() {
   document.getElementById("report-modal").style.display = "none";
 }
 
-// Startup
+// Auto startup
 setTimeout(() => {
   resizeCanvases();
-  initWebSocket();
+  startStreamPipeline();
   drawWashGraph();
 }, 100);
